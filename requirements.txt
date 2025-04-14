@@ -1,0 +1,11 @@
+django
+pillow
+channels
+opencv-python
+daphne
+numpy
+channels-redis
+mmpretrain
+mmcv
+torchvision
+torchaudio
