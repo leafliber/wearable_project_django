@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surgical Workflow Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #6a1b9a;
+            --secondary-color: #4a148c;
+            --accent-color: #9c27b0;
+            --background-color: #f5f5f5;
+            --text-color: #333;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        
+        .navbar {
+            background-color: var(--primary-color);
+        }
+        
+        .container-fluid {
+            padding: 0 20px;
+        }
+        
+        .main-container {
+            padding: 0 15px;
+            margin: 0 auto;
+        }
+        
+        .video-container {
+            background-color: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 16/9;
+        }
+        
+        .video-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            z-index: 10;
+            display: none;
+        }
+        
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+            border: none;
+        }
+        
+        .card-header {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            padding: 10px 15px;
+            border-radius: 10px 10px 0 0 !important;
+        }
+        
+        .phase-indicator {
+            padding: 15px;
+            text-align: center;
+            background-color: var(--secondary-color);
+            color: white;
+            border-radius: 0;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .confidence-bar {
+            height: 24px;
+            background-color: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        
+        .confidence-value {
+            height: 100%;
+            background-color: var(--accent-color);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            color: white;
+            font-weight: bold;
+            transition: width 0.5s ease;
+        }
+        
+        .timeline {
+            width: 100%;
+            height: 60px;
+            background-color: white;
+            border-radius: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .timeline-segment {
+            height: 100%;
+            display: inline-block;
+            position: absolute;
+            top: 0;
+            color: white;
+            text-shadow: 0 0 3px rgba(0,0,0,0.7);
+            padding: 5px;
+            box-sizing: border-box;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .phase-marker {
+            position: absolute;
+            bottom: 0;
+            width: 2px;
+            height: 100%;
+            background-color: red;
+            z-index: 10;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        
+        .status-active {
+            background-color: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 5px rgba(76, 175, 80, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+        
+        .status-inactive {
+            background-color: #F44336;
+        }
+        
+        .controls {
+            padding: 8px;
+            border-radius: 10px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .error-message {
+            background-color: rgba(244, 67, 54, 0.9);
+            color: white;
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .cached-indicator {
+            background-color: rgba(255, 152, 0, 0.9);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 12px;
+            display: none;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        
+        /* Performance-related styles */
+        .loading-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+        }
+        
+        /* Button styles */
+        .action-btn {
+            background-color: #f0f0f0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #333;
+        }
+        
+        .action-btn:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .btn-pause {
+            background-color: #f0f0f0;
+        }
+        
+        .btn-continue {
+            background-color: #e6f7ff;
+            color: #1890ff;
+        }
+        
+        .btn-screenshot {
+            background-color: #f6ffed;
+            color: #52c41a;
+        }
+        
+        .btn-export {
+            background-color: #fff7e6;
+            color: #fa8c16;
+        }
+        
+        .badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .badge-connecting {
+            background-color: #faad14;
+            color: white;
+        }
+        
+        .badge-inactive {
+            background-color: #8c8c8c;
+            color: white;
+        }
+        
+        .badge-active {
+            background-color: #52c41a;
+            color: white;
+        }
+        
+        .badge-warning {
+            background-color: #faad14;
+            color: white;
+        }
+        
+        .status-log {
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 14px;
+            background-color: #fafafa;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        
+        .status-log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .chart-container {
+            height: 180px;
+            margin-top: 10px;
+        }
+        
+        /* Responsive improvements */
+        @media (max-width: 992px) {
+            .phase-indicator {
+                font-size: 18px;
+                padding: 10px;
+            }
+            
+            .confidence-bar {
+                height: 20px;
+            }
+            
+            .timeline {
+                height: 50px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 0 10px;
+            }
+            
+            .action-btn {
+                padding: 6px 10px;
+                font-size: 12px;
+                margin-right: 5px;
+            }
+            
+            .video-container {
+                aspect-ratio: 4/3;
+            }
+            
+            .d-flex {
+                flex-wrap: wrap;
+            }
+            
+            .ms-auto {
+                margin-top: 10px;
+                width: 100%;
+            justify-content: space-between;
+            }
+            
+            .confidence-bar {
+                height: 16px;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .phase-indicator {
+                font-size: 16px;
+                padding: 8px;
+            }
+            
+            .card-header {
+                font-size: 14px;
+            }
+            
+            .timeline {
+                height: 40px;
+            }
+            
+            .chart-container {
+                height: 150px;
+            }
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+        
+        /* 添加图表加载动画 */
+        .chart-loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 180px;
+            background-color: rgba(255, 255, 255, 0.7);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 5;
+        }
+        
+        /* Webcam mode styles */
+        .btn-mode-switch {
+            background-color: #e6e6fa;
+            color: #6a1b9a;
+            border: 1px solid #6a1b9a;
+        }
+        
+        .btn-mode-switch.active {
+            background-color: #6a1b9a;
+            color: white;
+        }
+        
+        .webcam-container {
+            position: relative;
+            display: none;
+        }
+        
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        
+        #canvas-capture {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="{% url 'index' %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-activity me-2" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"/>
+                </svg>
+                Surgical Workflow Recognition
+            </a>
+            <div class="ms-auto d-flex align-items-center">
+                <span class="text-white me-3 d-flex align-items-center">
+                    <span class="status-indicator" id="connection-status"></span>
+                    <span class="badge badge-connecting" id="live-indicator">Live Stream</span>
+                </span>
+                <button class="btn btn-sm btn-outline-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear-fill" viewBox="0 0 16 16">
+                        <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/>
+                    </svg>
+                    Settings
+                </button>
+            </div>
+        </div>
+    </nav>
+
+                <div class="phase-indicator" id="current-phase">
+        Current Phase: Loading...
+                </div>
+
+    <div class="main-container">
+        <div class="error-message" id="error-box">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">Live Video Feed</div>
+                    <div class="card-body p-0">
+                        <div class="video-container">
+                            <div class="loading-placeholder" id="video-loading">
+                                <div class="spinner-border text-light" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                            <img id="video-feed" class="video-feed" src="" alt="Video feed">
+                            <div class="webcam-container" id="webcam-container">
+                                <video id="webcam" autoplay playsinline></video>
+                                <canvas id="canvas-capture"></canvas>
+                </div>
+                            <div class="cached-indicator" id="cached-indicator">Using cached prediction</div>
+                            <div class="video-overlay" id="video-overlay">
+                                <div class="spinner-border text-light mb-3" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                        </div>
+                                <h4 id="overlay-message">正在连接视频流...</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">Procedure Timeline</div>
+                    <div class="card-body p-0">
+                        <div class="timeline" id="timeline">
+                            <div class="phase-marker" id="phase-marker"></div>
+                    </div>
+                        <div class="d-flex justify-content-between px-2 py-1">
+                            <span>00:00</span>
+                            <span>Duration: <span id="total-time">00:00</span></span>
+                            <span id="elapsed-time">00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Phase Recognition</div>
+                    <div class="card-body">
+                        <div class="chart-container position-relative">
+                            <div class="chart-loading" id="chart-loading">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                            <canvas id="confidenceHistoryChart"></canvas>
+                        </div>
+                        <div class="confidence-details mt-2">
+                        {% for class in classes %}
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between mb-1 small">
+                                    <span>{{ class }}</span>
+                                    <span id="confidence-value-{{ forloop.counter0 }}">0%</span>
+                            </div>
+                            <div class="confidence-bar">
+                                    <div class="confidence-value" id="confidence-bar-{{ forloop.counter0 }}" style="width: 0%;">0%</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">System Status</div>
+                    <div class="card-body p-3">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 40%">模型:</th>
+                                    <td><span class="text-secondary" id="model-info">--</span></td>
+                                </tr>
+                                <tr>
+                                    <th>WebSocket:</th>
+                                    <td>
+                                        <span class="badge badge-connecting" id="connection-status-badge">Connecting</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>帧处理:</th>
+                                    <td>
+                                        <span class="badge badge-inactive" id="frame-processing-status">Inactive</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>视频分辨率:</th>
+                                    <td><span class="text-secondary" id="video-resolution">--</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="mt-2">
+                            <button id="clear-timeline" class="btn btn-sm btn-outline-secondary w-100">
+                                <i class="bi bi-trash"></i> 清除时间线
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">Performance Metrics</div>
+                    <div class="card-body p-3">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 40%">帧率:</th>
+                                    <td><span id="fps-value">-- FPS</span></td>
+                                </tr>
+                                <tr>
+                                    <th>延迟:</th>
+                                    <td><span id="latency-value">-- ms</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        </div>
+                        </div>
+                
+                <div class="card">
+                    <div class="card-header">状态日志</div>
+                    <div class="card-body p-2">
+                        <div class="status-log" id="status-log">
+                            <div class="status-log-entry">[<span id="current-time">11:08:47</span>] 正在连接 WebSocket...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">Detected Instruments</div>
+                    <div class="card-body py-3">
+                        <button class="btn btn-sm btn-primary disabled">等待数据...</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <div class="row mt-2 mb-3">
+            <div class="col-12">
+                <div class="d-flex">
+                    <button id="pause-button" class="action-btn btn-pause">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pause-fill me-2" viewBox="0 0 16 16">
+                            <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+                        </svg>
+                        暂停
+                    </button>
+                    <button id="continue-button" class="action-btn btn-continue" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-play-fill me-2" viewBox="0 0 16 16">
+                            <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                        </svg>
+                        继续
+                    </button>
+                    <button id="screenshot-button" class="action-btn btn-screenshot">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-camera-fill me-2" viewBox="0 0 16 16">
+                            <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+                            <path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/>
+                        </svg>
+                        截图
+                    </button>
+                    <button id="export-button" class="action-btn btn-export">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download me-2" viewBox="0 0 16 16">
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                        </svg>
+                        导出数据
+                    </button>
+                    <button id="mode-switch-button" class="action-btn btn-mode-switch">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-camera me-2" viewBox="0 0 16 16">
+                            <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"/>
+                            <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z"/>
+                        </svg>
+                        <span id="mode-text">切换到摄像头模式</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get DOM elements
+            const videoFeed = document.getElementById('video-feed');
+            const videoLoading = document.getElementById('video-loading');
+            const videoOverlay = document.getElementById('video-overlay');
+            const overlayMessage = document.getElementById('overlay-message');
+            const cachedIndicator = document.getElementById('cached-indicator');
+            const connectionStatus = document.getElementById('connection-status');
+            const connectionLabel = document.getElementById('live-indicator');
+            const connectionStatusBadge = document.getElementById('connection-status-badge');
+            const currentPhase = document.getElementById('current-phase');
+            const inferenceTime = document.getElementById('latency-value');
+            const fpsValue = document.getElementById('fps-value');
+            const elapsedTime = document.getElementById('elapsed-time');
+            const totalTime = document.getElementById('total-time');
+            const timeline = document.getElementById('timeline');
+            const phaseMarker = document.getElementById('phase-marker');
+            const statusLog = document.getElementById('status-log');
+            const currentTimeEl = document.getElementById('current-time');
+            const pauseButton = document.getElementById('pause-button');
+            const continueButton = document.getElementById('continue-button');
+            const screenshotButton = document.getElementById('screenshot-button');
+            const exportButton = document.getElementById('export-button');
+            const errorBox = document.getElementById('error-box');
+            const errorMessage = document.getElementById('error-message');
+            const chartLoading = document.getElementById('chart-loading');
+            
+            // Timeline variables
+            let timelineSegments = [];
+            let maxDuration = 300; // 5 minutes in seconds
+            let baseTime = 0;
+            
+            // Application state
+            let isPaused = false;
+            let lastImageData = null;
+            let confidenceData = {};
+            let lastUpdateTime = Date.now();
+            let frameCount = 0;
+            let fps = 0;
+            let isWebcamMode = false;
+            let webcamStream = null;
+            let webcamIntervalId = null;
+            let captureContext = null;
+            let isProcessingFrame = false; // 标记是否正在处理帧
+            let framePendingCapture = false; // 标记是否有待捕获的帧
+            const MAX_FPS = 5; // 最大FPS设置为5
+            const CAPTURE_INTERVAL = 1000 / MAX_FPS; // 200ms between captures
+            
+            // Colors for different phases
+            const phaseColors = {
+                'additional_injection': '#8E24AA',
+                'circumcision': '#5E35B1',
+                'installation': '#3949AB',
+                'marking': '#F2994A',  // Orange color as shown in the image
+                'submucosal_dissection': '#9C27B0',
+                'submucosal_injection': '#4CAF50',
+                'idle': '#A9A9A9'      // Gray for idle
+            };
+            
+            // Default color for phases
+            const defaultColor = '#757575';
+            
+            // Socket reference
+            let socket = null;
+            let isReconnecting = false;
+            let reconnectAttempts = 0;
+            let reconnectTimer = null;
+            let lastPhase = '';
+            let lastSegmentStart = 0;
+            
+            // Initialize confidence history chart
+            let confidenceHistoryChart = null;
+            const confidenceHistoryCtx = document.getElementById('confidenceHistoryChart').getContext('2d');
+            
+            function initConfidenceChart() {
+                try {
+                    // 显示加载中状态
+                    if (chartLoading) {
+                        chartLoading.style.display = 'flex';
+                    }
+                    
+                    // 检查Chart是否存在
+                    if (typeof Chart === 'undefined') {
+                        console.error('Chart.js is not loaded');
+                        addLogEntry('错误: Chart.js未加载，无法初始化图表');
+                        return;
+                    }
+
+                    // 检查canvas元素是否存在
+                    if (!confidenceHistoryCtx) {
+                        console.error('Canvas context not found');
+                        addLogEntry('错误: 找不到图表画布元素');
+                        return;
+                    }
+                    
+                    // 如果已有图表实例，销毁它
+                    if (confidenceHistoryChart) {
+                        confidenceHistoryChart.destroy();
+                    }
+                    
+                    // Create datasets for each class
+                    const datasets = [];
+                    {% for class in classes %}
+                    datasets.push({
+                        label: '{{ class }}',
+                        data: [],
+                        borderColor: phaseColors['{{ class }}'] || defaultColor,
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4
+                    });
+                    {% endfor %}
+                    
+                    // Initialize empty labels (will be filled with timestamps)
+                    const labels = Array(30).fill('');
+                    
+                    // Create the chart
+                    confidenceHistoryChart = new Chart(confidenceHistoryCtx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    title: {
+                                        display: true,
+                                        text: '置信度 (%)'
+                                    }
+                                },
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: '时间'
+                                    },
+                                    ticks: {
+                                        maxTicksLimit: 6
+                                    }
+                                }
+                            },
+                            plugins: {
+                                title: {
+                                    display: false
+                                },
+                                legend: {
+                                    display: true,
+                                    position: 'bottom',
+                                    labels: {
+                                        boxWidth: 12,
+                                        font: {
+                                            size: 10
+                                        }
+                                    }
+                                }
+                            },
+                            animation: {
+                                duration: 0
+                            }
+                        }
+                    });
+                    
+                    addLogEntry('图表初始化成功');
+                    
+                    // 隐藏加载中状态
+                    if (chartLoading) {
+                        chartLoading.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error initializing chart:', error);
+                    addLogEntry(`图表初始化失败: ${error.message}`);
+                    
+                    // 隐藏加载中状态
+                    if (chartLoading) {
+                        chartLoading.style.display = 'none';
+                    }
+                }
+            }
+            
+            // Update confidence history chart
+            function updateConfidenceChart(confidences) {
+                if (!confidenceHistoryChart) {
+                    try {
+                        initConfidenceChart();
+                        if (!confidenceHistoryChart) {
+                            return;  // 如果初始化失败，直接返回
+                        }
+                    } catch (e) {
+                        console.error('Failed to initialize chart:', e);
+                        return;
+                    }
+                }
+                
+                try {
+                    // Format current time
+                    const now = new Date();
+                    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    
+                    // Add new data point
+                    for (let i = 0; i < confidences.length; i++) {
+                        // Add the new confidence value
+                        confidenceHistoryChart.data.datasets[i].data.push(confidences[i]);
+                        
+                        // Keep only the last 30 points
+                        if (confidenceHistoryChart.data.datasets[i].data.length > 30) {
+                            confidenceHistoryChart.data.datasets[i].data.shift();
+                        }
+                    }
+                    
+                    // Update labels
+                    confidenceHistoryChart.data.labels.push(timeString);
+                    if (confidenceHistoryChart.data.labels.length > 30) {
+                        confidenceHistoryChart.data.labels.shift();
+                    }
+                    
+                    // Update the chart
+                    confidenceHistoryChart.update();
+                } catch (error) {
+                    console.error('Error updating chart:', error);
+                    // 如果更新失败，尝试重新初始化图表
+                    setTimeout(() => {
+                        try {
+                            initConfidenceChart();
+                        } catch (e) {
+                            console.error('Failed to reinitialize chart:', e);
+                        }
+                    }, 2000);
+                }
+            }
+            
+            // Initialize UI
+            function initUI() {
+                videoFeed.style.display = 'none';
+                videoLoading.style.display = 'flex';
+                connectionStatus.className = 'status-indicator';
+                
+                // Initialize current time
+                updateCurrentTime();
+                
+                // 显示图表加载状态
+                if (chartLoading) {
+                    chartLoading.style.display = 'flex';
+                }
+                
+                // 初始化或重置图表
+                try {
+                    if (!confidenceHistoryChart) {
+                        initConfidenceChart();
+                    } else {
+                        // 重置图表数据
+                        confidenceHistoryChart.data.labels = Array(30).fill('');
+                        confidenceHistoryChart.data.datasets.forEach(dataset => {
+                            dataset.data = [];
+                        });
+                        confidenceHistoryChart.update();
+                    }
+                } catch (e) {
+                    console.error('Chart initialization error:', e);
+                }
+                
+                // Clear the timeline
+                timeline.innerHTML = '';
+                timeline.appendChild(phaseMarker);
+                timelineSegments = [];
+                
+                // Reset confidence bars
+                for (let i = 0; i < {{ classes|length }}; i++) {
+                    const bar = document.getElementById(`confidence-bar-${i}`);
+                    const value = document.getElementById(`confidence-value-${i}`);
+                    if (bar && value) {
+                        bar.style.width = '0%';
+                        bar.textContent = '0%';
+                        value.textContent = '0%';
+                    }
+                }
+                
+                // Add connection log entry
+                addLogEntry('正在连接 WebSocket...');
+            }
+            
+            // Update current time display
+            function updateCurrentTime() {
+                const now = new Date();
+                currentTimeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            }
+            
+            // Add log entry
+            function addLogEntry(message) {
+                updateCurrentTime();
+                const entry = document.createElement('div');
+                entry.className = 'status-log-entry';
+                entry.innerHTML = `[<span>${currentTimeEl.textContent}</span>] ${message}`;
+                statusLog.prepend(entry);
+                
+                // Limit to 10 entries
+                while (statusLog.children.length > 10) {
+                    statusLog.removeChild(statusLog.lastChild);
+                }
+            }
+            
+            // Format time from seconds to MM:SS
+            function formatTime(seconds) {
+                const minutes = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            // Take screenshot
+            function takeScreenshot() {
+                try {
+                    if (!videoFeed.src) {
+                        addLogEntry('无法截图：没有视频源');
+                        return;
+                    }
+                    
+                    // 创建一个通知
+                    const notification = document.createElement('div');
+                    notification.className = 'alert alert-info position-fixed top-0 start-50 translate-middle-x mt-3';
+                    notification.style.zIndex = '9999';
+                    notification.innerText = '截图处理中...';
+                    document.body.appendChild(notification);
+                    
+                    // Create canvas and draw image
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoFeed.naturalWidth || 640;
+                    canvas.height = videoFeed.naturalHeight || 480;
+                    const ctx = canvas.getContext('2d');
+                    
+                    if (!ctx) {
+                        throw new Error('无法获取画布上下文');
+                    }
+                    
+                    ctx.drawImage(videoFeed, 0, 0, canvas.width, canvas.height);
+                    
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.download = `surgical-phase-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+                    
+                    try {
+                        link.href = canvas.toDataURL('image/png');
+                    } catch (e) {
+                        throw new Error(`无法创建图像数据: ${e.message}`);
+                    }
+                    
+                    // Trigger download
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // 移除通知
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                        // 添加成功通知
+                        const successNotification = document.createElement('div');
+                        successNotification.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+                        successNotification.style.zIndex = '9999';
+                        successNotification.innerText = '截图已保存';
+                        document.body.appendChild(successNotification);
+                        
+                        // 3秒后移除成功通知
+                        setTimeout(() => {
+                            document.body.removeChild(successNotification);
+                        }, 3000);
+                    }, 1000);
+                    
+                    addLogEntry('截图已保存');
+                } catch (error) {
+                    console.error('Screenshot error:', error);
+                    addLogEntry(`截图失败: ${error.message}`);
+                    
+                    // 显示错误通知
+                    const errorNotification = document.createElement('div');
+                    errorNotification.className = 'alert alert-danger position-fixed top-0 start-50 translate-middle-x mt-3';
+                    errorNotification.style.zIndex = '9999';
+                    errorNotification.innerText = `截图失败: ${error.message}`;
+                    document.body.appendChild(errorNotification);
+                    
+                    // 3秒后移除错误通知
+                    setTimeout(() => {
+                        document.body.removeChild(errorNotification);
+                    }, 3000);
+                }
+            }
+            
+            // Export data
+            function exportData() {
+                try {
+                    if (timelineSegments.length === 0) {
+                        addLogEntry('警告: 没有时间线数据可导出');
+                    }
+                    
+                    // 创建一个通知
+                    const notification = document.createElement('div');
+                    notification.className = 'alert alert-info position-fixed top-0 start-50 translate-middle-x mt-3';
+                    notification.style.zIndex = '9999';
+                    notification.innerText = '数据导出处理中...';
+                    document.body.appendChild(notification);
+                    
+                    const data = {
+                        timeline: timelineSegments.map(seg => ({
+                            phase: seg.phase,
+                            startTime: seg.startTime,
+                            endTime: seg.endTime
+                        })),
+                        confidences: confidenceData,
+                        exportTime: new Date().toISOString()
+                    };
+                    
+                    // Create JSON file
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.download = `surgical-data-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+                    link.href = url;
+                    
+                    // Trigger download
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    
+                    // 移除通知
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                        // 添加成功通知
+                        const successNotification = document.createElement('div');
+                        successNotification.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+                        successNotification.style.zIndex = '9999';
+                        successNotification.innerText = '数据已导出';
+                        document.body.appendChild(successNotification);
+                        
+                        // 3秒后移除成功通知
+                        setTimeout(() => {
+                            document.body.removeChild(successNotification);
+                        }, 3000);
+                    }, 1000);
+                    
+                    addLogEntry('数据已导出');
+                } catch (error) {
+                    console.error('Data export error:', error);
+                    addLogEntry(`数据导出失败: ${error.message}`);
+                    
+                    // 显示错误通知
+                    const errorNotification = document.createElement('div');
+                    errorNotification.className = 'alert alert-danger position-fixed top-0 start-50 translate-middle-x mt-3';
+                    errorNotification.style.zIndex = '9999';
+                    errorNotification.innerText = `数据导出失败: ${error.message}`;
+                    document.body.appendChild(errorNotification);
+                    
+                    // 3秒后移除错误通知
+                    setTimeout(() => {
+                        document.body.removeChild(errorNotification);
+                    }, 3000);
+                }
+            }
+            
+            // Add a segment to the timeline
+            function addTimelineSegment(phase, startTime, endTime, isLast = false) {
+                // Calculate position and width
+                const timelineWidth = timeline.offsetWidth;
+                const left = (startTime / maxDuration) * 100;
+                const width = ((endTime - startTime) / maxDuration) * 100;
+                
+                // Create segment element
+                const segment = document.createElement('div');
+                segment.className = 'timeline-segment';
+                segment.style.left = `${left}%`;
+                segment.style.width = `${width}%`;
+                segment.style.backgroundColor = phaseColors[phase] || defaultColor;
+                segment.textContent = phase;
+                segment.title = `${phase} (${formatTime(startTime)} - ${formatTime(endTime)})`;
+                
+                // Add to timeline
+                timeline.appendChild(segment);
+                
+                // Store segment info
+                timelineSegments.push({
+                    element: segment,
+                    phase: phase,
+                    startTime: startTime,
+                    endTime: endTime
+                });
+                
+                // Update the total time display
+                totalTime.textContent = formatTime(endTime);
+            }
+            
+            // Update the phase marker position
+            function updatePhaseMarker(currentTime) {
+                const position = (currentTime / maxDuration) * 100;
+                phaseMarker.style.left = `${position}%`;
+            }
+            
+            // Calculate FPS
+            function calculateFPS() {
+                const now = Date.now();
+                const elapsed = (now - lastUpdateTime) / 1000;
+                
+                if (elapsed > 1) {
+                    fps = Math.round(frameCount / elapsed);
+                    fpsValue.textContent = `${fps} FPS`;
+                    frameCount = 0;
+                    lastUpdateTime = now;
+                }
+            }
+            
+            // Function to establish WebSocket connection
+            function connectWebSocket() {
+                // Clean up previous connection if exists
+                if (socket) {
+                    try {
+                        socket.close();
+                    } catch (error) {
+                        console.error('Error closing existing socket:', error);
+                    }
+                }
+                
+                initUI();
+                
+                try {
+                    // Determine the correct WebSocket URL based on window location
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${wsProtocol}//${window.location.host}/ws/stream/`;
+                    
+                    addLogEntry(`尝试连接 WebSocket: ${wsUrl}`);
+                    
+                    // Create WebSocket connection
+                    socket = new WebSocket(wsUrl);
+                    
+                    // Set timeout for connection
+                    const connectionTimeout = setTimeout(() => {
+                        if (socket.readyState !== WebSocket.OPEN) {
+                            addLogEntry('WebSocket 连接超时');
+                            socket.close();
+                            attemptReconnect();
+                        }
+                    }, 10000);
+                    
+                    // Connection opened
+                    socket.addEventListener('open', function(event) {
+                        clearTimeout(connectionTimeout);
+                        console.log('WebSocket connected');
+                        connectionStatus.className = 'status-indicator status-active';
+                        connectionLabel.textContent = 'Live Stream';
+                        connectionLabel.className = 'badge badge-active';
+                        connectionStatusBadge.textContent = 'Connected';
+                        connectionStatusBadge.className = 'badge badge-active';
+                        videoOverlay.style.display = 'none';
+                        isReconnecting = false;
+                        reconnectAttempts = 0;
+                        if (reconnectTimer) {
+                            clearTimeout(reconnectTimer);
+                            reconnectTimer = null;
+                        }
+                        errorBox.style.display = 'none';
+                        
+                        addLogEntry('WebSocket 连接成功');
+                        
+                        // If we were in webcam mode before disconnection, restart it
+                        if (isWebcamMode) {
+                            setTimeout(() => {
+                                socket.send(JSON.stringify({
+                                    command: 'switch_to_webcam',
+                                    timestamp: Date.now()
+                                }));
+                            }, 1000);
+                        }
+                    });
+                    
+                    // Listen for messages
+                    socket.addEventListener('message', function(event) {
+                        try {
+                            const data = JSON.parse(event.data);
+                            
+                            // Handle status updates
+                            if (data.status_update) {
+                                console.log("Received status update:", data);
+                                
+                                // Update model info and video resolution
+                                if (data.model_info) {
+                                    const modelInfo = document.getElementById('model-info');
+                                    if (modelInfo) {
+                                        modelInfo.textContent = data.model_info;
+                                        modelInfo.classList.remove('text-secondary');
+                                        modelInfo.classList.add('text-primary');
+                                    }
+                                }
+                                
+                                if (data.resolution) {
+                                    const videoResolution = document.getElementById('video-resolution');
+                                    if (videoResolution) {
+                                        videoResolution.textContent = data.resolution;
+                                        videoResolution.classList.remove('text-secondary');
+                                        videoResolution.classList.add('text-primary');
+                                    }
+                                }
+                                
+                                // Update frame processing status
+                                const frameProcessingStatus = document.getElementById('frame-processing-status');
+                                if (frameProcessingStatus) {
+                                    frameProcessingStatus.textContent = 'Active';
+                                    frameProcessingStatus.className = 'badge badge-active';
+                                }
+                                
+                                // Update average inference time if provided
+                                if (data.avg_inference_time) {
+                                    if (inferenceTime) {
+                                        inferenceTime.textContent = data.avg_inference_time;
+                                    }
+                                }
+                                
+                                // Log the status update
+                                addLogEntry(`系统状态更新: 模型=${data.model_info || 'Unknown'}, 分辨率=${data.resolution || 'Unknown'}`);
+                                
+                                return; // Skip the rest of the processing for status updates
+                            }
+                            
+                            // Skip processing if paused
+                            if (isPaused) {
+                                return;
+                            }
+                            
+                            // Handle connection status message
+                            if (data.status === 'connected') {
+                                console.log('Connection confirmed, FPS:', data.fps);
+                                addLogEntry(`连接确认，视频帧率: ${data.fps} FPS`);
+                                return;
+                            }
+                            
+                            // Handle error message
+                            if (data.error) {
+                                console.error('Error from server:', data.error);
+                                errorBox.style.display = 'block';
+                                errorMessage.textContent = data.error;
+                                addLogEntry(`错误: ${data.error}`);
+                                
+                                // Check if we should show an overlay message for the error
+                                if (data.error.includes("Invalid frame") || data.error.includes("video source")) {
+                                    videoOverlay.style.display = 'flex';
+                                    overlayMessage.textContent = `错误: ${data.error}`;
+                                }
+                                
+                                return;
+                            }
+                            
+                            // Count frame for FPS calculation
+                            frameCount++;
+                            calculateFPS();
+                            
+                            // Hide loading once we receive the first frame
+                            videoLoading.style.display = 'none';
+                            videoFeed.style.display = 'block';
+                            
+                            // Show cached indicator if prediction is from cache
+                            cachedIndicator.style.display = data.cached ? 'block' : 'none';
+                            
+                            // Update video feed with the received image
+                            if (data.image) {
+                                videoFeed.src = 'data:image/jpeg;base64,' + data.image;
+                                lastImageData = data.image;
+                            }
+                            
+                            // Update current phase
+                            if (data.stage) {
+                                const phaseName = data.stage.replace(/_/g, ' ');
+                                currentPhase.textContent = `Current Phase: ${phaseName}`;
+                                
+                                // Update timeline if phase changed
+                                const currentTime = data.elapsed_time || 0;
+                                
+                                if (data.stage !== lastPhase) {
+                                    // Add previous segment if we had one
+                                    if (lastPhase && lastSegmentStart < currentTime) {
+                                        addTimelineSegment(lastPhase, lastSegmentStart, currentTime);
+                                        addLogEntry(`阶段变化: ${lastPhase} → ${data.stage}`);
+                                    }
+                                    
+                                    // Start a new segment
+                                    lastPhase = data.stage;
+                                    lastSegmentStart = currentTime;
+                                }
+                                
+                                // Update current position marker
+                                updatePhaseMarker(currentTime);
+                            }
+                            
+                            // Update confidence bars and store confidence data
+                            if (data.confidences) {
+                                // Store confidence data
+                                const timestamp = new Date().toISOString();
+                                confidenceData[timestamp] = data.confidences;
+                                
+                                // Update confidence history chart
+                                updateConfidenceChart(data.confidences);
+                                
+                                for (let i = 0; i < data.confidences.length; i++) {
+                                    const confidence = data.confidences[i];
+                                    const bar = document.getElementById(`confidence-bar-${i}`);
+                                    const value = document.getElementById(`confidence-value-${i}`);
+                                    
+                                    if (bar && value) {
+                                        bar.style.width = `${confidence}%`;
+                                        bar.textContent = `${confidence.toFixed(1)}%`;
+                                        value.textContent = `${confidence.toFixed(1)}%`;
+                                    }
+                                }
+                            }
+                            
+                            // Update performance metrics
+                            if (data.inference_time) {
+                                inferenceTime.textContent = `${data.inference_time} ms`;
+                            }
+                            
+                            if (data.elapsed_time) {
+                                elapsedTime.textContent = formatTime(data.elapsed_time);
+                            }
+                            
+                            // Handle command acknowledgments
+                            if (data.command_ack) {
+                                console.log(`Command ${data.command_ack} acknowledged`);
+                                
+                                if (data.command_ack === 'pause') {
+                                    addLogEntry('服务器已暂停视频处理');
+                                    // Update frame processing status
+                                    const frameProcessingStatus = document.getElementById('frame-processing-status');
+                                    if (frameProcessingStatus) {
+                                        frameProcessingStatus.textContent = 'Paused';
+                                        frameProcessingStatus.className = 'badge badge-warning';
+                                    }
+                                } else if (data.command_ack === 'resume') {
+                                    addLogEntry('服务器已恢复视频处理');
+                                    // Update frame processing status
+                                    const frameProcessingStatus = document.getElementById('frame-processing-status');
+                                    if (frameProcessingStatus) {
+                                        frameProcessingStatus.textContent = 'Active';
+                                        frameProcessingStatus.className = 'badge badge-active';
+                                    }
+                                }
+                                
+                                return;
+                            }
+
+                            // 对于摄像头模式，标记帧处理完成，可以发送下一帧
+                            if (isWebcamMode) {
+                                isProcessingFrame = false;
+                                
+                                // 如果有待处理的帧请求，立即捕获新帧
+                                if (framePendingCapture) {
+                                    framePendingCapture = false;
+                                    setTimeout(captureFrame, 0);
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error parsing message:', e);
+                            addLogEntry(`解析消息错误: ${e.message}`);
+                            
+                            // 错误情况下也重置处理状态
+                            if (isWebcamMode) {
+                                isProcessingFrame = false;
+                            }
+                        }
+                    });
+                    
+                    // Connection closed
+                    socket.addEventListener('close', function(event) {
+                        console.log('WebSocket disconnected, code:', event.code);
+                        connectionStatus.className = 'status-indicator status-inactive';
+                        connectionLabel.textContent = 'Disconnected';
+                        connectionLabel.className = 'badge badge-inactive';
+                        connectionStatusBadge.textContent = 'Disconnected';
+                        connectionStatusBadge.className = 'badge badge-inactive';
+                        
+                        // Update frame processing status
+                        const frameProcessingStatus = document.getElementById('frame-processing-status');
+                        if (frameProcessingStatus) {
+                            frameProcessingStatus.textContent = 'Inactive';
+                            frameProcessingStatus.className = 'badge badge-inactive';
+                        }
+                        
+                        // Stop webcam if active
+                        if (isWebcamMode) {
+                            stopWebcam();
+                        }
+                        
+                        // Show overlay with reconnecting message
+                        videoOverlay.style.display = 'flex';
+                        
+                        addLogEntry('WebSocket 连接断开');
+                        
+                        // Auto-reconnect logic
+                        if (!isReconnecting) {
+                            isReconnecting = true;
+                            reconnectAttempts = 0;
+                            attemptReconnect();
+                        }
+                    });
+                    
+                    // Connection error
+                    socket.addEventListener('error', function(event) {
+                        console.error('WebSocket error:', event);
+                        connectionStatus.className = 'status-indicator status-inactive';
+                        connectionLabel.textContent = 'Error';
+                        connectionLabel.className = 'badge badge-inactive';
+                        connectionStatusBadge.textContent = 'Error';
+                        connectionStatusBadge.className = 'badge badge-inactive';
+                        
+                        addLogEntry('WebSocket 连接错误');
+                    });
+                } catch (error) {
+                    console.error('Error connecting to WebSocket:', error);
+                    addLogEntry(`连接到 WebSocket 错误: ${error.message}`);
+                    attemptReconnect();
+                }
+            }
+            
+            // Retry connection with exponential backoff
+            function attemptReconnect() {
+                reconnectAttempts++;
+                const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000); // Max 30 seconds
+                
+                overlayMessage.textContent = `连接断开. 将在 ${Math.round(delay/1000)}秒 后重连... (尝试 ${reconnectAttempts})`;
+                addLogEntry(`将在 ${Math.round(delay/1000)}秒 后尝试重连 (尝试 ${reconnectAttempts})`);
+                
+                reconnectTimer = setTimeout(() => {
+                    console.log(`Reconnect attempt ${reconnectAttempts}...`);
+                    connectWebSocket();
+                }, delay);
+            }
+            
+            // Toggle pause/resume
+            function togglePause() {
+                isPaused = !isPaused;
+                
+                // Update UI immediately for responsiveness
+                if (isPaused) {
+                    pauseButton.style.display = 'none';
+                    continueButton.style.display = 'inline-flex';
+                    addLogEntry('发送暂停命令到服务器...');
+                    
+                    // 摄像头模式下重置帧处理状态
+                    if (isWebcamMode) {
+                        isProcessingFrame = false;
+                        framePendingCapture = false;
+                    }
+                } else {
+                    pauseButton.style.display = 'inline-flex';
+                    continueButton.style.display = 'none';
+                    addLogEntry('发送恢复命令到服务器...');
+                    
+                    // 摄像头模式下恢复时立即捕获一帧
+                    if (isWebcamMode && !isProcessingFrame) {
+                        setTimeout(captureFrame, 0);
+                    }
+                }
+                
+                // Send command to server if socket is connected
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    const command = isPaused ? 'pause' : 'resume';
+                    socket.send(JSON.stringify({
+                        command: command,
+                        timestamp: Date.now()
+                    }));
+                } else {
+                    addLogEntry('错误: WebSocket 连接已断开，无法发送命令');
+                    errorBox.style.display = 'block';
+                    errorMessage.textContent = 'WebSocket 连接已断开，无法发送命令。请刷新页面重试。';
+                }
+            }
+            
+            // Clear timeline
+            function clearTimelineData() {
+                // Remove all segments
+                timelineSegments.forEach(segment => {
+                    if (segment.element && segment.element.parentNode) {
+                        segment.element.remove();
+                    }
+                });
+                
+                timelineSegments = [];
+                lastSegmentStart = 0;
+                
+                // Reset the marker and keep it in timeline
+                phaseMarker.style.left = '0%';
+                timeline.innerHTML = '';
+                timeline.appendChild(phaseMarker);
+                
+                totalTime.textContent = '0:00';
+                addLogEntry('时间线已清除');
+            }
+            
+            // Handle mode switching
+            function toggleMode() {
+                if (isWebcamMode) {
+                    // 首先完全停止摄像头模式
+                    stopWebcam();
+                    
+                    // 重置处理状态
+                    isProcessingFrame = false;
+                    framePendingCapture = false;
+                    isWebcamMode = false;
+                    
+                    // 更新UI
+                    document.getElementById('mode-switch-button').classList.remove('active');
+                    document.getElementById('mode-text').textContent = '切换到摄像头模式';
+                    document.getElementById('webcam-container').style.display = 'none';
+                    document.getElementById('video-feed').style.display = 'block';
+                    
+                    // 确保先发送命令再切换回后端模式
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({
+                            command: 'switch_to_backend',
+                            timestamp: Date.now()
+                        }));
+                        addLogEntry('已发送切换到后端模式命令');
+                    }
+                    
+                    addLogEntry('已切换到后端视频模式');
+                } else {
+                    // 先发送命令暂停后端处理
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({
+                            command: 'switch_to_webcam',
+                            timestamp: Date.now()
+                        }));
+                        addLogEntry('已发送切换到摄像头模式命令');
+                    }
+                    
+                    // 然后启动摄像头模式
+                    startWebcam();
+                    isWebcamMode = true;
+                    
+                    // 更新UI
+                    document.getElementById('mode-switch-button').classList.add('active');
+                    document.getElementById('mode-text').textContent = '切换到后端模式';
+                    document.getElementById('webcam-container').style.display = 'block';
+                    document.getElementById('video-feed').style.display = 'none';
+                    
+                    addLogEntry('已切换到摄像头模式');
+                }
+            }
+            
+            // Start webcam capture
+            function startWebcam() {
+                const webcamElement = document.getElementById('webcam');
+                const canvasElement = document.getElementById('canvas-capture');
+                
+                // Setup canvas
+                canvasElement.width = 640;
+                canvasElement.height = 480;
+                captureContext = canvasElement.getContext('2d');
+                
+                // 重置处理状态
+                isProcessingFrame = false;
+                framePendingCapture = false;
+                
+                // Request webcam access
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            facingMode: 'user'
+                        } 
+                    })
+                    .then(function(stream) {
+                        webcamStream = stream;
+                        webcamElement.srcObject = stream;
+                        webcamElement.style.display = 'block';
+                        
+                        // 启动首次捕获，后续通过回调链进行
+                        addLogEntry('摄像头已连接');
+                        // 首次立即捕获帧
+                        setTimeout(captureFrame, 0);
+                        // 额外启动间隔定时器，确保帧捕获不会完全停止
+                        webcamIntervalId = setInterval(function() {
+                            if (!isProcessingFrame && !framePendingCapture) {
+                                framePendingCapture = true;
+                                captureFrame();
+                            }
+                        }, CAPTURE_INTERVAL);
+                    })
+                    .catch(function(error) {
+                        console.error('Error accessing webcam:', error);
+                        addLogEntry(`摄像头访问错误: ${error.message}`);
+                        errorBox.style.display = 'block';
+                        errorMessage.textContent = `无法访问摄像头: ${error.message}`;
+                        
+                        // Revert to backend mode
+                        toggleMode();
+                    });
+                } else {
+                    addLogEntry('您的浏览器不支持摄像头访问');
+                    errorBox.style.display = 'block';
+                    errorMessage.textContent = '您的浏览器不支持摄像头访问';
+                    
+                    // Revert to backend mode
+                    toggleMode();
+                }
+            }
+            
+            // Stop webcam capture
+            function stopWebcam() {
+                // 清除定时器
+                if (webcamIntervalId) {
+                    clearInterval(webcamIntervalId);
+                    webcamIntervalId = null;
+                }
+                
+                // 停止所有轨道
+                if (webcamStream) {
+                    webcamStream.getTracks().forEach(track => {
+                        track.stop();
+                        webcamStream.removeTrack(track);
+                    });
+                    webcamStream = null;
+                }
+                
+                // 清除视频元素
+                const webcamElement = document.getElementById('webcam');
+                if (webcamElement) {
+                    webcamElement.srcObject = null;
+                    webcamElement.style.display = 'none';
+                }
+                
+                // 重置状态变量
+                isProcessingFrame = false;
+                framePendingCapture = false;
+                
+                addLogEntry('摄像头已完全断开');
+            }
+            
+            // Capture frame from webcam and send to server
+            function captureFrame() {
+                if (!isWebcamMode || isPaused || !captureContext || !socket || socket.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+                
+                // 如果正在处理帧，标记有待处理的帧请求但不实际发送
+                if (isProcessingFrame) {
+                    framePendingCapture = true;
+                    return;
+                }
+                
+                const webcamElement = document.getElementById('webcam');
+                const canvasElement = document.getElementById('canvas-capture');
+                
+                // 标记正在处理帧
+                isProcessingFrame = true;
+                
+                // Draw video frame to canvas - 捕获最新的一帧
+                captureContext.drawImage(webcamElement, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Convert canvas to blob
+                canvasElement.toBlob(function(blob) {
+                    // Send blob to server
+                    socket.send(blob);
+                    // Count frame for FPS calculation
+                    frameCount++;
+                    calculateFPS();
+                }, 'image/jpeg', 0.8);  // 80% quality JPEG
+            }
+            
+            // Event listeners
+            pauseButton.addEventListener('click', togglePause);
+            continueButton.addEventListener('click', togglePause);
+            screenshotButton.addEventListener('click', takeScreenshot);
+            exportButton.addEventListener('click', exportData);
+            
+            // Add mode switch button event listener
+            document.getElementById('mode-switch-button').addEventListener('click', toggleMode);
+            
+            // Handle clear timeline button
+            document.getElementById('clear-timeline').addEventListener('click', clearTimelineData);
+            
+            // Initialize WebSocket connection
+            connectWebSocket();
+            
+            // Clean up on page unload
+            window.addEventListener('beforeunload', function() {
+                // Stop webcam if active
+                if (isWebcamMode) {
+                    stopWebcam();
+                }
+                
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    // Send pause command before closing to help server clean up resources
+                    try {
+                        socket.send(JSON.stringify({
+                            command: 'pause',
+                            timestamp: Date.now()
+                        }));
+                    } catch (e) {
+                        console.error('Error sending pause command on unload:', e);
+                    }
+                    socket.close();
+                }
+                if (reconnectTimer) {
+                    clearTimeout(reconnectTimer);
+                }
+            });
+
+            // 处理视频feed上的错误
+            videoFeed.addEventListener('error', function(e) {
+                console.error('Video feed error:', e);
+                addLogEntry(`视频流错误: ${e.type}`);
+                videoOverlay.style.display = 'flex';
+                overlayMessage.textContent = '视频流加载失败，请刷新页面重试';
+            });
+        });
+    </script>
+</body>
+</html>

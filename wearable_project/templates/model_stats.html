@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Statistics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #6a1b9a;
+            --secondary-color: #4a148c;
+            --accent-color: #9c27b0;
+            --background-color: #f5f5f5;
+            --text-color: #333;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        
+        .navbar {
+            background-color: var(--primary-color);
+        }
+        
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: none;
+        }
+        
+        .card-header {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            border-radius: 10px 10px 0 0 !important;
+        }
+        
+        .stats-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .stats-label {
+            font-size: 1rem;
+            color: #666;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+        
+        .status-good {
+            color: #4CAF50;
+        }
+        
+        .status-warning {
+            color: #FF9800;
+        }
+        
+        .status-error {
+            color: #F44336;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'index' %}">
+                Surgical Video Analysis
+            </a>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'index' %}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'surgical_workflow' %}">Workflow UI</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'model_stats' %}">Model Stats</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <h1 class="mb-4">Model Performance Statistics</h1>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Model Status</div>
+                    <div class="card-body text-center">
+                        {% if model_loaded %}
+                            <div class="stats-value status-good">Active</div>
+                        {% else %}
+                            <div class="stats-value status-error">Inactive</div>
+                        {% endif %}
+                        <div class="stats-label">Model Availability</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Average Inference Time</div>
+                    <div class="card-body text-center">
+                        <div class="stats-value {% if avg_inference_time < 100 %}status-good{% elif avg_inference_time < 300 %}status-warning{% else %}status-error{% endif %}">
+                            {{ avg_inference_time }} ms
+                        </div>
+                        <div class="stats-label">Average processing time per frame</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Frames Processed</div>
+                    <div class="card-body text-center">
+                        <div class="stats-value">{{ frames_processed }}</div>
+                        <div class="stats-label">Total frames analyzed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Classification Classes</div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            {% for class in classes %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ class }}
+                                    <span class="badge bg-primary rounded-pill">Class {{ forloop.counter }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Performance Metrics</div>
+                    <div class="card-body">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">System Information</div>
+                    <div class="card-body">
+                        <table class="table">
+                            <tbody>
+                                <tr>
+                                    <th>Last Inference Time:</th>
+                                    <td>{{ last_inference_time }} ms</td>
+                                </tr>
+                                <tr>
+                                    <th>Model Type:</th>
+                                    <td>ImageClassificationInferencer</td>
+                                </tr>
+                                <tr>
+                                    <th>Framework:</th>
+                                    <td>MMPretrain</td>
+                                </tr>
+                                <tr>
+                                    <th>Backend:</th>
+                                    <td>{% if "cuda" in request.META.HTTP_USER_AGENT %}CUDA{% else %}CPU{% endif %}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-3">
+            <div class="col-12 text-center">
+                <a href="{% url 'index' %}" class="btn btn-primary">Back to Home</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Performance chart
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            const performanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Inference Time', 'Target'],
+                    datasets: [{
+                        label: 'Time (ms)',
+                        data: [{{ avg_inference_time }}, 100],
+                        backgroundColor: [
+                            '{% if avg_inference_time < 100 %}rgba(76, 175, 80, 0.6){% elif avg_inference_time < 300 %}rgba(255, 152, 0, 0.6){% else %}rgba(244, 67, 54, 0.6){% endif %}',
+                            'rgba(106, 27, 154, 0.2)'
+                        ],
+                        borderColor: [
+                            '{% if avg_inference_time < 100 %}rgb(76, 175, 80){% elif avg_inference_time < 300 %}rgb(255, 152, 0){% else %}rgb(244, 67, 54){% endif %}',
+                            'rgb(106, 27, 154)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Time (ms)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Inference Performance'
+                        }
+                    }
+                }
+            });
+            
+            // Auto-refresh every 10 seconds
+            setInterval(function() {
+                window.location.reload();
+            }, 10000);
+        });
+    </script>
+</body>
+</html> 

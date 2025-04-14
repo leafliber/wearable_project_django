@@ -1,0 +1,20 @@
+[project]
+name = "Wearable_project_django"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Fiber", email = "leaf@airo.cc"},
+]
+dependencies = ["django", "pillow", "channels", "opencv-python", "daphne", "numpy", "channels-redis", "mmpretrain", "mmcv", "torch<2.6", "torchvision", "torchaudio"]
+requires-python = "==3.9.*"
+readme = "README.md"
+license = {text = "GPLv3"}
+
+
+[tool.pdm]
+distribution = false
+
+[tool.pdm.scripts]
+server  = "python ./wearable_project/manage.py runserver 0.0.0.0:8000"
+migrate = "python ./wearable_project/manage.py migrate"
+check   = "python ./wearable_project/manage.py check"
