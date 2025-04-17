@@ -26,9 +26,14 @@ pip install -r requirements.txt
 
 Then, replease the model files by [release](https://github.com/leafliber/wearable_project_django/releases) where you can download our models and demo.  
 replace the models and demo documents:  
-epoch_100.pth -> wearable_project_django/wearable_project/model/epoch_100.pth  
-resnet50_batch256_fp16_imagenet_20210320-b3964210.pth -> wearable_project_django/wearable_project/model/config/resnet50_batch256_fp16_imagenet_20210320-b3964210.pth  
-test.mp4 -> demo/test.mp4 
+```
+epoch_100.pth ->  
+wearable_project_django/wearable_project/model/epoch_100.pth  
+resnet50_batch256_fp16_imagenet_20210320-b3964210.pth ->  
+wearable_project_django/wearable_project/model/config/resnet50_batch256_fp16_imagenet_20210320-b3964210.pth  
+test.mp4 ->  
+demo/test.mp4
+```
 (test demo could be your own video or backend stream or frontend stream)
 
 
