@@ -11,6 +11,8 @@ then use `pdm` `conda` or `pip` to manage this project
 
 #### pdm (not adapt with conda, if you installed conda, please skip it)
 ```shell
+git clone https://github.com/leafliber/wearable_project_django
+cd wearable_project_django
 pip install --user pdm
 pdm install
 pdm run server
@@ -18,12 +20,16 @@ pdm run server
 
 #### pip
 ```shell
+git clone https://github.com/leafliber/wearable_project_django
+cd wearable_project_django
 pip install torch
 pip install -r requirements.txt
 ```
 
 #### conda
 ```shell
+git clone https://github.com/leafliber/wearable_project_django
+cd wearable_project_django
 conda activate -yourenvname-
 pip install -r requirements.txt
 ```
