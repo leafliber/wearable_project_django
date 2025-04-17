@@ -33,3 +33,6 @@ cd wearable_project_django
 conda activate -yourenvname-
 pip install -r requirements.txt
 ```
+
+Last, replease the model files by release where you can download our models.
+replease the test.mp4 by your video. 
