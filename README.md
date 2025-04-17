@@ -40,8 +40,8 @@ demo/test.mp4
 
 
 ## 2. How to use
-You have to install before use.
-run the server  
+You have to install before use.  
+run the server:
 ```shell
 pdm run server
 ```
