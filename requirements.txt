@@ -7,5 +7,6 @@ numpy
 channels-redis
 mmpretrain
 mmcv
+torch<2.6
 torchvision
 torchaudio
